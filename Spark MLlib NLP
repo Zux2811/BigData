@@ -1,0 +1,38 @@
+from pyspark.sql import SparkSession
+from pyspark.ml.feature import StringIndexer, VectorAssembler
+from pyspark.ml.classification import LinearSVC
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+from pyspark.ml import Pipeline
+
+# Khởi tạo phiên Spark
+spark = SparkSession.builder.appName("MLlibExample").getOrCreate()
+
+# Đọc dữ liệu từ tệp CSV
+data = spark.read.csv("/kaggle/input/immigration-trends-and-population-in-europe/EU Immigrants.csv")
+# Label Encoding cho cột "EU COUNTRIES"
+indexer = StringIndexer(inputCol="EU COUNTRIES", outputCol="label")
+data = indexer.fit(data).transform(data)
+
+# Xác định các cột đặc trưng
+feature_columns = [col_name for col_name in data.columns if col_name not in ["EU COUNTRIES", "label"]]
+assembler = VectorAssembler(inputCols=feature_columns, outputCol="features")
+
+# Tạo mô hình LinearSVC (SVM) cho phân loại
+svm = LinearSVC(featuresCol="features", labelCol="label")
+
+# Tạo một pipeline cho các bước xử lý và mô hình
+pipeline = Pipeline(stages=[assembler, svm])
+
+# Chia dữ liệu thành tập huấn luyện và tập kiểm tra
+train_data, test_data = data.randomSplit([0.7, 0.3], seed=123)
+
+# Huấn luyện mô hình
+model = pipeline.fit(train_data)
+
+# Đ mô hình trên tập kiểm tra
+predictions = model.transform(test_data)
+accuracy = MulticlassClassificationEvaluator(metricName="accuracy").evaluate(predictions)
+print("Accuracy:", accuracy)
+
+# Đóng Spark
+spark.stop()
